@@ -74,7 +74,7 @@
 
 #### Understanding the Divergence of Environment Requirements
 
-- Microservice's dependencies often conflict (see python 2 vs 3). This makes installing them on the same machine difficult. This can be a problem for dev and ops.
+- Microservice's dependencies often conflict (see python 2 vs 3). This makes installing them on the same machine difficult.
 
 ### 1.1.2 Providing a Consistent Environment to Applications
 
@@ -110,5 +110,35 @@
 - Kubernetes provides *NoOps* by abstracting away the actual hardware and exposing it as a single platform for deploying and running applications.
 
 ## 1.2 Understanding What Containers are
+
+- Kubernetes solves the problems discussed in 1.1 by isolating apps inside containers.
+  - Container technologies include *Docker* and *rkt*
+
+### 1.2.1 Understanding What Containers are
+
+- Both containers and VMs prevent dependency conflicts, but only containers:
+  - Can be configured automatically
+  - Share the host's OS (kernel), thereby saving resources, money and time in boots etc
+
+#### Isolating Components with Linux Container Technologies
+
+- Containers share the host's OS, but containers' processes are isolated from each other, preventing interference.
+
+#### Comparing Virtual Machines to Containers
+
+- While containers share the host's OS and resources, VMs don't. 
+  - Each guest VM includes its own OS which translates instructions through the hypervisor to the host's OS.
+  - Each guest VM stakes a claim on the host's resources (CPU, RAM, HHD...) through the hypervisor that other VM's can't use.
+
+- Note, there are 2 types of hypervisors:
+  - Type 1 hypervisor that don't use the host's OS
+  - Type 2 hypervisor that does use the host's OS
+
+- Because VM's overhead, Ops often group multiple apps on each VM instead of dedicating a whole VM to each app.
+  - Containers don't have this overhead so apps are split into microservices
+
+- VM's aren't all bad. VMs provide full OS isolation, while containers don't, but this comes at a large cost.
+
+#### Introducing the Mechanisms that make Container Isolation Possible
 
 - 
