@@ -141,4 +141,140 @@
 
 #### Introducing the Mechanisms that make Container Isolation Possible
 
+- Containers isolate processes with 2 techniques:
+  1. *Linux Namespaces* which give each process its own view of the system's files, processes, network interfaces, hostname...
+  2. *Linux control groups* (aka *cgroups*) which limit the amount of resources the process can consume (CPU, memory, bandwidth...)
+
+##### Isolating Processes with Linux Namespace
+
+- A linux process belongs to one of each of the following categories of namespaces:
+  - __Mount (mnt)__: 
+  - __Process ID (pid)__: 
+  - __Network (net)__: the network namespace determines which network interfaces the application running inside the process sees.
+    - Network interfaces can only belong to 1 net interface.
+    - Each container uses its own net namespace and has its own network interface.
+  - __Inter-process communication (ipc)__: 
+  - __UTS__: determines what hostname and domain name the process running inside the namespace sees
+  - __User ID (user)__: 
+
+- You can create custom namespaces to organize and isolate resources.
+
+##### Limiting Resources Available to a Process
+
+- *Cgroups* limit the amount of system resources (CPU, memory, bandwidth...) a process can use.
+- *Cgroups* are a linux kernel feature
+
+### 1.2.2 Introducing the Docker Container Platform
+
+- Docker is a containerization technology.
+- Docker makes packaging apps, their libraries, their dependencies, and even their OS file system in a simple, cross-platform way.
+- A docker container runs the same no matter what hardware, or OS it's running on.
+- Of course, docker containers don't include the kernel when they're packaged, do this will vary between systems.
+- Docker containers are transported as container images, which are smaller than VM images because they don't include the entire OS.
+- Docker container images are composed of layers. This makes downloading images whose base layers you already have much faster.
+
+#### Understanding Docker Concepts
+
+- 3 main docker concepts:
+  1. __Images__: A packaged version of your application.
+    - Includes the filesystem and other metadata such as executable paths.
+  2. __Registries__: A repo for storeing and sharing images.
+  3. __Containers__: Docker containers are just linux containers created from docker images. Linux containers, as we've discussed, are processes that are isolated by namespace and resource-constrained with cgroups.
+
+#### Buiding, Distributing and Running a Docker Image
+
+- Sharing images through a repo makes using and extending existing images simple and easy.
+
+#### Comparing Virtual Machines and Docker Containers
+
+- Docker containers share dependencies and libraries.
+- Docker containers' portability is limited by their kernel.
+
+##### Understanding Image Layers
+
+- Docker containers share dependencies and libraries by using other images at a lower layer.
+
+- Advantages of sharing dependencies:
+  - Distribution of images is easier
+  - Images take up less space on disk
+
+- Containers make separate copies of files in shared lower layers when they make changes to them, otherwise they would interfere with other containers. 
+  - Containers' lower layer files are read-only. When a container is run, a new writable layer is created on top of the layers in the image. When one of the files is edited, the file is copied and the process writes to the copy.
+
+##### Understanding the Porbability limitations
+
+- Because containers don't run their own kernel, they can only run on a host with a compatible kernel.
+- Unlike containers, VMs do run their own kernel and can run on any host.
+- Kernel compatibility can become a problem when dealing with hardware compatibility (ARM vs x86 for example)
+
+### 1.2.3 Introducing rkt-an Alternative to Docker
+
+- rkt, like docker interfaces with linux containers.
+- Docker and rkt are both part of the Open Container Initiative (OCI), who creates open industry standards areound container formats and runtimes.
+- rkt emphasises security, composability, and the OCI standards. It can even run docker images.
+- Kubernetes supports both Docker and rkt, but this book only uses Docker.
+
+## 1.3 Introducing Kubernetes
+
+- Kubernetes was released in 2014, after a decade of google working in secret with similar internal tools called Borg and later Omega.
+
+### 1.3.2 Looking at Kubernetes from the Top of a Mountain
+
+- Kubernetes allows easy deployment and management of containerized applications.
+
+- Remember:
+  - Containers can be heterogenous. Deploying apps through Kubernetes is always the same.
+  - Containers can be automatically deployed.
+  - Containers are isolated
+  - Containers abstract hardware into a single resource.
+
+#### Understanding the Core of What Kubernetes Does
+
+- Kubernetes has 1 master node and worker nodes.
+- The master node deploys apps to worker nodes.
+
+- Developers and Ops don't and shouldn't care what node an app is deployed to.
+  - Although developers can specify that certain apps run on a node together.
+  - Apps communicate the same way, no matter what node they're on.
+
+#### Helping Developers Focus on the Core App Features
+
+- Kubernetes is like an OS for a cluster. It automatically handles tasks like:
+  - service discovery
+  - scaling
+  - load-balancing
+  - self-healing
+  - leader election
+
+- Before kubernetes, developers had to manage these tasks themselves.
+
+#### Helping Ops Teams Achieve Better Resource Utilization
+
+- Kubernetes dynamically locates the app in the cluster. This enables efficient resource utilization.
+
+### 1.3.3 Understanding the Architecture of a Kubernetes Cluster
+
+- Kubernetes has 2 types of nodes
+  1. __A Master node__: which hosts the *kubernetes control plane* that control and manages the whole kubernetes system. 
+  2. __Worker nodes__: That run the applications you deploy
+
+- Ch 11 explains these components in more detail.
+
+#### The Control Plane
+
+- The __control plane__ is a set of the following components (possibly spread across nodes) that control the cluster.
+  - The __Kubernetes API Server__, which you and other Control Plane components communicate with
+  - The __Scheduler__ which schedules apps
+  - The __Controller Manager__ which performs cluster-level functions, like replicating components, keeping track of worker nodes, handling node failures...
+  - __etcd__, a distributed data store for cluster configuration.
+
+#### The Nodes
+
+- Worker nodes run, monitor, and provide services to applications. They consist of the following components:
+  - A __container runtime__ like Docker, rkt that runs your containers.
+  - A __Kubelet__ which talks to the API server and manages the container runtime.
+  - The __Kubernetes Service Proxy (kube-proxy)__ which load-balances network traffic between application components.
+
+### 1.3.4 Running an Application in Kubernetes
+
 - 
