@@ -277,4 +277,78 @@
 
 ### 1.3.4 Running an Application in Kubernetes
 
+- Steps to deploying an application in kubernetes
+  1. Push container images to a registry.
+  2. post a description of your app in the Kubernetes API server. This description includes:
+      - container images for each component
+      - How the components relate to each other (which need to be co-located on one node...)
+      - How many replicas each container should run in.
+      - What services components provide to internal and external clients.
+
+#### Understanding How the Description Results in a Running Container
+
+- There are 3 steps kubernetes takes in running a container:
+  1. The *API server* processes the app's description
+  2. The *Scheduler* schedules thespecified groups of containers onto the available worker nodes based on computational resources required by each group and resources available on each node.
+  3. After a worker is scheduled, the worker's *kubelet* instructs the *Container Runtime* (docker) to pull and run the container.
+
+- __Pods__ are sets of applications. We will cover them more in ch 3.
+  - Co-located containers run in the same pod and aren't isolated from each other.
+  - Pod specification includes the number of replicas of the pod that should run in parallel.
+
+#### Keeping the Containers Running
+
+- Kubernetes ensures the running state of an application always matches the described state.
+  - If a replica goes down, kubernetes starts a new replica.
+  - If a node goes down, kubernetes runs more containers on a new node.
+
+#### Scaling the Number of Copies
+
+- You can dynamically increase or decrease the number of replicas kubernetes is running.
+- You can also let kubernetes automatically decide how many replicas to run based on real-time metrics like CPU load, memory consumption, queries per second, etc.
+
+#### Hitting a Moving Target
+
+- Containers moving nodes would make networking difficult, but kubernetes exposes a single IP for all containers that provide the same service. Then the *kube-proxy* load balances connections across the containers. Clients can then simply find the external IP through DNS and connect to it as though it were a single machine.
+- Kubernetes manages this process with environment variables.
+
+### 1.3.5 Understanding the Benefits of Using Kubernetes
+
+- Kubernetes simplifies deployment.
+
+#### Simplifying Application Deployment
+
+- Kubernetes abstracts hardware into a single massive resource. This frees developers and ops from caring about hardware specifics.
+
+- In some cases, kubernetes does deal with hardware requirements.
+  - For example, certain applications may require ssd storage.
+
+#### Achieving Better Utilization of Hardware
+
+- Kubernetes is better at optimizing resource use by automatically choosing where to deploy applications than humans ever could
+
+#### Health Checking and Self-Healing
+
+- Kubernetes makes node failures less catostrophic. If a node dies, the app simply moves to another node, and the ops team buys another computer.
+
+#### Automatic Scaling
+
+- Kubernetes scales automatically. Previously, Ops teams had to do this.
+- In a cloud environment, this is even easier as the cloud's kubernetes engine will automatically use more resources.
+
+#### Simplifying Application Development
+
+- Developers benefit from kubernetes because:
+  - Apps run in the same environment in development and production. This make discovering bugs easier
+  - Kubernets implements many tricky features like service and peer discovery, leader election, scaling...
+  - Kubernetes don't deploy code that doestn' work.
+
+## 1.4 Summary
+
+- Basic overview
+  - microservices vs monoliths
+  - VMs vs containers
+  - Kubernetes abstracts hardware into a single resource
+  - NoOps
+
 - 
