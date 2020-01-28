@@ -64,4 +64,18 @@ $ docker build -t kubia .
 
 #### Understanding How an Image is Built
 
+- The docker client tells the docker daemon builds the image. The docker daemon then pulls all the related files and builds the image. Note, these components don't have to be on the same computer. This is how tools like `docker-machine` work.
+
+#### Understanding Image Layers
+
+- Each docker image layer corresponds to a docker file command. Docker downloads each of these layers individually (unless the layer is stored locally).
+- The last layer of an image is tagged. For example, in our example Dockerfile, the last layer is tagged as `kubia:latest`
+- You can ess all images using `docker images` or `docker image ls`
+
+#### Comparing Building IMages with a Dockerfile vs Manually
+
+- An alternative to creating a docker file is to create a docker container, run commands in it, then build an image from the container's final state. This is bad practice. Using a Dockfile is essentially the same thing, but it's automatic, repeatable and you can source control it.
+
+### 2.1.5 Running the Container Image
+
 - 
