@@ -375,6 +375,219 @@ kubia-d8nw9   1/1     Running   0          36m
 - Note, they used `rc` instead of `replicationcontroller`, they're the same thing.
   - [see here](https://kubernetes.io/docs/reference/kubectl/overview/#resource-types) for other abbreviations.
 
+- It takes some time for the service to start so be patient.
+
 #### Listing Services
 
-- 
+- To see that the `kubia-http` service is running, use `kubectl get services`
+
+```sh
+kubectl get services
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP    21h
+kubia-http   ClusterIP   10.96.150.242   <none>        8080/TCP   14h
+```
+
+- The external IP address of `kubia-http` is `<none>` because I'm using minikube which doesn't support the `LoadBalancer` services. However on GKE they are supported and the external IP can be accessed from anywhere in the world!
+- The cluster IP of `kubia-http` is `10.96.150.242`, which can be accessed from any machine in the cluster.
+
+#### Accessing Your Service Through its External IP
+
+- When you run `curl 10.96.150.242` you get `You've hit kubia-d8nw9`. If I had an external IP I could do this from anywhere in the world!
+  - `kubia-d8nw9` is the hostname of a single pod with it's own IP on a single node. If we had more replicas running, it might change when we refresh.
+
+### 2.3.3 The Logical Parts of Your System
+
+- Kubernetes abstracts away physical hardware. We don't care what physical node we're running on. We only care about the `Pods`, `ReplicationControllers`, and `Services` running in our `Cluster`
+
+#### Understanding How The `ReplicationController`, the `Pod`, and the `Service` Fit together
+
+- `kubectl run` created a `ReplicationController` that created a `Pod`.
+- To make pods accessible from outside the cluster, we simply exposed the `Pods` managed by the `ReplicationController` as a single `Service`
+
+```graphviz
+digraph a{
+      rankdir = LR;
+      compound=true;
+      node[shape=box];
+      service [label="Service:kubia-http\nInternal IP: 10.96.150.242\n External IP: none"];
+      user -> service;
+
+      subgraph cluster_0{
+            label="Pod: kubia-d9nw9\n IP:kubectl describe pod kubia-d8nw9"
+            container[label="NodeJS Container"]
+      }
+
+      service->container[label="port 8080"]
+
+      Rep [ label="ReplicationController: Kubia \n Replicas:1"]
+      Rep->container[lhead=cluster_0]
+}
+```
+
+#### Understanding the `Pod` and its Container
+
+- In the above diagram, the pod is running a single container running the kubia image and listening on port 8080.
+- This pod could be running more containers, but it's not.
+- As you can see each pod has its own IP that the service uses to communicate with it.
+
+#### Understanding the Role of the `ReplicationController`
+
+- The `ReplicationController` keeps the number of stated replicas running.
+- In our example, we didn't specify a number of replicas so it defaulted to 1.
+- If `kubia-d8nw9` ever died, the ReplicationController would start a new pod running the kubia container.
+
+#### Understanding why you need a Service
+
+- Pods are ephemeral. Services are not. You can reliably point at a service that then points to pods running the containers you want to connect to.
+
+### 2.3.4 Horizontally Scaling the Application
+
+- To see information about the running replication controller use `kubctl get rc`
+
+```sh
+kubectl get rc
+NAME    DESIRED   CURRENT   READY   AGE
+kubia   1         1         1       20h
+```
+
+- This output's __DESIRED__ section shows the number of replicas the replication controller is told to run
+- The output's __CURRENT__ section shows the number of pods currently running.
+
+#### increasing the Desired Relplica count
+
+- To scale up the desired replica count use `kubectl scale rc kubia --replicas=3`
+- Telling kubernetes the desired state, and letting it achieve the state automatically is an important principle of kubernetes.
+
+#### Seeing the Results of the Scaling out
+
+- You can see the scaling worked with `kubctl get rc`
+
+```sh
+kubectl get rc kubia
+NAME    DESIRED   CURRENT   READY   AGE
+kubia   3         3         3       20h
+```
+
+- You can also see the pods it created
+
+```sh
+kubectl get pods
+NAME          READY   STATUS    RESTARTS   AGE
+kubia-d8nw9   1/1     Running   0          20h
+kubia-l2hhx   1/1     Running   0          3m22s
+```
+
+- It's important to build your app in a way that it can handle this kind of scaling.
+
+#### Seeing Requests Hit all 3 Pods when Hitting the Service
+
+- Now we have 3 pods and a service load balancing across them
+
+```sh
+for i in {0..5}; do curl 10.96.150.242:8080; done
+You've hit kubia-l2hhx
+You've hit kubia-d8nw9
+You've hit kubia-l72ng
+You've hit kubia-l2hhx
+You've hit kubia-l72ng
+You've hit kubia-d8nw9
+```
+
+#### Visualizing the New State of your System
+
+- We now have 3 pods, so our visual looks different:
+
+```graphviz
+digraph a{
+      rankdir = TB;
+      compound=true;
+      node[shape=box];
+      service [label="Service:kubia-http\nInternal IP: 10.96.150.242\n External IP: none"];
+      user -> service;
+
+      subgraph cluster_0{
+            label="Pod: kubia-d8nw9\n IP:kubectl describe pod kubia-d8nw9"
+            container_d8nw9[label="NodeJS Container"]
+      }
+
+      subgraph cluster_1{
+            label="Pod: kubia-l72ng\n IP:kubectl describe pod kubia-l72ng"
+            container_l72ng[label="NodeJS Container"]
+      }
+
+      subgraph cluster_2{
+            label="Pod: kubia-l2hhx\n IP:kubectl describe pod kubia-l2hhx"
+            container_l2hhx[label="NodeJS Container"]
+      }
+
+      
+
+      service->container_d8nw9[label="port 8080"]
+      service->container_l72ng[label="port 8080"]
+      service->container_l2hhx[label="port 8080"]
+
+      Rep [ label="ReplicationController: Kubia \n Replicas:1"]
+      Rep->container_d8nw9 [lhead=cluster_0 constraint=false]
+      Rep->container_l72ng [lhead=cluster_1 constraint=false]
+      Rep->container_l2hhx [lhead=cluster_2 constraint=false]
+
+      container_d8nw9->Rep[style=invisible arrowhead=none];
+}
+```
+
+- Now to scale the replication controller back down
+
+```sh
+$kubectl scale rc kubia --replicas=1
+replicationcontroller/kubia scaled
+
+$ kubectl get rc
+NAME    DESIRED   CURRENT   READY   AGE
+kubia   1         1         1       21h
+```
+
+### 2.3.5 Examining What Nodes Your App is Running on
+
+- It's not important what node your app is running on. Let kubernetes do its job.
+
+#### Displaying the Pod IP and the Pod's Node When Listing Pods
+
+- If you really want to know where a pod is running use this:
+
+```sh
+$ kubectl get pods -o wide
+NAME          READY   STATUS    RESTARTS   AGE   IP           NODE       NOMINATED NODE   READINESS GATES
+kubia-d8nw9   1/1     Running   0          21h   172.17.0.4   minikube   <none>           <none>
+```
+
+#### Inspecting other Details of a Pod with kubectl Describe
+
+- You can also see what node the pod is running on with `kubectl describe pod <podname>` along with other information.
+
+### 2.3.6 introducing the Kubernetes Dashboard
+
+- kubernetes has the webUI, it's GUI
+
+#### Accessing the Dashboard when Running Kubernetes in GKE
+
+- `kubectl cluster-info | grep dashboard` gives the IP.
+- `gcloud container clusters describe kubia | grep -E "username|password):"` gives the credentials.
+
+#### Accessing the Dashboard When Using Minikube
+
+- `sudo minikube dashboard` starts teh minikube dashboard. It doesn't require credentials.
+
+## 2.4 Summary
+
+- We covered some simple kubernetes commands:
+  - Pull and run a public container
+  - Package your apps into containers and push them to a registry
+  - Enter and inspect a running container
+  - Set up a multi-node Kubernetes cluster on GKE
+  - Configure an alias and tab completeion for `kubectl`
+  - list and inspect nodes, pods, services and replicationControllers
+  - Run a container in kubernetes and expose it.
+  - Basic understanding of pods, replication controllers, and services
+  - Scaling
+  - WebUI
