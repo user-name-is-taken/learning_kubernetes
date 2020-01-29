@@ -324,8 +324,7 @@ replicationcontroller/kubia created
 
 - __Pod__: a group of one or more tightly related containers that will always run together on the same worker node and in the same Linux namespace(s).
   - Each pod is like a separate logical machine with its own IP, hostname, processes... running a single application
-    - The application can be a single process, running in a single container, or it can be a main application process and additional supporting processes, each running in its own container. 
-    - Containers in a pod (and only those containers) appear on the same logical machine no matter what physical node they're running on.
+    - The application can be a single process, running in a single container, or it can be a main application process and additional supporting processes, each running in its own container.
 
 #### Listing Pods
 
