@@ -398,4 +398,199 @@ Annotations:  mycompany.com/someannotatino: foo bar
 
 ## 3.7 Using Namespaces to Group Resources
 
-- 
+- __Namespaces__ can split objects into non-overlapping groups.
+  - Note, this is different than kubernetes namespace
+
+- Namespaces are different from labels because:
+  - A resource can only be in 1 namespace
+  - A resource can have no labels
+
+- Namespaces allow you to:
+  - Perform functions on only resources inside the namespace.
+  - Re-use a resource name on resources in different namespaces.
+
+### 3.7.1 Understanding the Need for Namespaces
+
+- Some types of resources aren't namespaced. For example, nodes aren't namespaced.
+
+### 3.7.2 Discovering other Namespaces and Their Pods
+
+- To see all your namespaces:
+
+```sh
+$ kubectl get ns
+NAME                   STATUS   AGE
+default                Active   2d1h
+kube-node-lease        Active   2d1h
+kube-public            Active   2d1h
+kube-system            Active   2d1h
+kubernetes-dashboard   Active   26h
+```
+
+- By default, kubernetes performs all commands in the `default` namespace.
+- To see what's in other namespaces use the `--namespace <namespace>` command:
+
+```sh
+$ kubectl get --namespace kube-system pods
+NAME                               READY   STATUS    RESTARTS   AGE
+coredns-6955765f44-l4jvr           1/1     Running   1          2d1h
+coredns-6955765f44-ntsfm           1/1     Running   1          2d1h
+etcd-minikube                      1/1     Running   1          2d1h
+kube-addon-manager-minikube        1/1     Running   1          2d1h
+kube-apiserver-minikube            1/1     Running   1          2d1h
+kube-controller-manager-minikube   1/1     Running   1          2d1h
+kube-proxy-825q8                   1/1     Running   1          2d1h
+kube-scheduler-minikube            1/1     Running   1          2d1h
+storage-provisioner                1/1     Running   2          2d1h
+```
+
+- The `kube-system` namespace is a good usecase for namesapces. It's used to keep system resources separate from other resources so you don't accidentally delete them.
+- Namespaces are a good way to give user's their own set of distinct resources.
+- We'll see in chapters 12 and 14 we'll see how to authenticate access to namespaces and how to limit the computational resources available in a namespace.
+
+### 3.7.3 Creating a Namespace
+
+- namespaces are themselves kubernetes resources.
+- You can create namespaces by posting a YAML file to the API.
+
+#### Creating a Namespace from a YAML File
+
+- To create a new namespace [custom-namespace.yaml](./exercises/custom-namespace.yaml):
+
+```sh
+$ kubectl create -f ./exercises/custom-namespace.yaml 
+namespace/custom-nsamespace created
+```
+
+#### Creating a Namespace with `kubectl create namespace`
+
+- Creating a namespace is slow, so here's a dedicated command for it:
+
+```
+$ kubectl create namespace custom-namespace
+namespace/custom-namespace created
+```
+
+- Namespaces aren't allowed to contain dots!
+
+### 3.7.4 Managing Objects in other Namespaces
+
+- To make resources in your new namespace either:
+  - add a `namespace: custom-namespace` to your metadata section
+  - specify the namespace when creating the resource with the `kubectl create` command 
+
+`$ kubectl create -f ./exercises/kubia-manual.yaml -n custom-namespace`
+
+- Now we have two pods named `kubia-manual` in two different namespaces.
+- To interact with kubia-manual in custom-namespace, you need to include the namespace flag
+- You can change the current namespace like this:
+
+```sh
+$ kubectl config set-context $(kubectl config current-context) --namespace custom-namespace
+Context "minikube" modified.
+$ kubectl get pods
+NAME           READY   STATUS    RESTARTS   AGE
+kubia-manual   1/1     Running   0          4m4s
+```
+
+### 3.7.5 Understanding the Isolation Provided by Namespaces
+
+- Although namespaces isolate resources, they don't isolate them in the same ways linux namespaces do.
+- For example, pods can ping across namespaces.
+
+## 3.8 Stopping and Removing Pods
+
+- We don't need all the pods we've created, so now we stop them.
+
+### 3.8.1 Deleting a Pod by Name
+
+- First, switch back to the default namespace
+
+`$ kubectl config set-context $(kubectl config current-context) --namespace default`
+
+- Then Delete the `kubia-gpu` pod by name
+
+```sh
+$ kubectl delete pod kubia-gpu 
+pod "kubia-gpu" deleted
+```
+
+- To delete a pod kubernetes:
+  - Sends the pod a __SIGTERM__
+  - Waits 30 seconds for the pod to shut down
+  - If the pod didn't die it sends a __SIGKILL__
+
+- The delete command takes multiple arguments i.e. `kubectl delete po pod1 pod2`
+
+### 3.8.2 Deleting Pods Using Label Selectors
+
+- To delete pods using a label selector:
+
+```sh
+$ kubectl delete po -l creation_method=manual
+pod "kubia-manual" deleted
+pod "kubia-manual-v2" deleted
+```
+
+### 3.8.3 Deleting Pods by Deleting the Whole Namespace
+
+- If you delete a namespace, its pods are deleted too:
+
+```sh
+$ kubectl delete ns custom-namespace 
+namespace "custom-namespace" deleted
+```
+
+### 3.8.4 Deleting All Pods in a Namespace, While Keeping the Namespace
+
+- Now we have just 1 pod left:
+
+```sh
+ kubectl get pods
+NAME          READY   STATUS    RESTARTS   AGE
+kubia-f8r2b   1/1     Running   0          24h
+```
+
+- To finish up, we'll delete all pods in the namespace:
+
+```sh
+$ kubectl delete po --all
+pod "kubia-f8r2b" deleted
+```
+
+- `kubia-f8r2b` was deleted, but the replication-controller created a new pod to replace it:
+
+```sh
+$ kubectl get pods
+NAME          READY   STATUS    RESTARTS   AGE
+kubia-jzxfg   1/1     Running   0          69s
+```
+
+### 3.8.5 Deleting (Almost) All Resources in a Namespace
+
+- To delete the ReplicationControoler, the Pods and the Services we made:
+
+```sh
+$ kubectl delete all --all
+pod "kubia-jzxfg" deleted
+replicationcontroller "kubia" deleted
+service "kubernetes" deleted
+service "kubia" deleted
+service "kubia-http" deleted
+```
+
+- The first `all` specifies we're deleting all resource types. The second specifies we're deleting everything matching that criteria.
+- Note, this doesn't delete everything. Certain resources, like secrets (ch 7) are preserved.
+- This command also deleted the kubernetes service, but that gets re-created.
+
+## 3.9 Summary
+
+- This chapter covered:
+  - Pods are Co-located containers
+  - When to include multiple containers in a pod
+  - Pods are similar to a physical host in the real world
+  - using YAML and JSON to create pods
+  - Using labels and Label selectors to organize pods, schedule pods, and perform operations on multiple pods.
+  - Annotations
+  - Namespaces
+  - `kubectl explain`

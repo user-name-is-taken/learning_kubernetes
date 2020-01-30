@@ -9,8 +9,8 @@ spec:
   nodeSelector:
     gpu: "true"
   containers:
-  - image: michaellundquist/kubia
+    - image: michaellundquist/kubia
     name: kubia
     ports:
     - containerPort: 8080
-      protocol: TCP
+    protocol: TCP
