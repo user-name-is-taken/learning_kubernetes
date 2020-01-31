@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: kubia
+spec:
+  replicas: 3
+  selector:
+    matchExpressions:
+    # this is a list of associated arrays (aka objects).
+    - key: app 
+      operator: In
+      values:
+      - kubia
+    - {key: otherKey, operator: In, values: [kubia]}
+    # in json, this looks like:
+    #"selector": {
+    #                "matchExpressions": [
+    #                    {
+    #                        "key": "app",
+    #                        "operator": "In",
+    #                        "values": [
+    #                            "kubia"
+    #                        ]
+    #                    }
+    #                    {
+    #                        "key": "otherKey",
+    #                        "operator": "In",
+    #                        "values": [
+    #                            "kubia"
+    #                        ]
+    #                    }
+    #                ]
+    #            },
+  template:
+    metadata:
+      labels:
+        app: kubia
+        otherKey: kubia
+    spec:
+      containers:
+      - name: kubia
+        image: michaellundquist/kubia
+        ports:
+        - containerPort: 8080

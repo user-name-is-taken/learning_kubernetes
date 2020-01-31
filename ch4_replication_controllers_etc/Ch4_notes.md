@@ -376,4 +376,336 @@ kubia-wmm9q   1/1     Running   0          36m
 
 ### 4.3.4 Using the ReplicaSet's More Expressive label Selectors
 
-- 
+- At first, we used `matchLabels` to show that replica sets are the same as replication controllers.
+- ReplicaSets can also use `rs.spec.selector.matchExpressions` which is a list of label selector requirements. The requirements are ANDed.
+
+- `matchExpressions` has 3 parts:
+  - A `key` which is the label key that the selector applies to.
+  - An `operator` that represents a key's relationship to a set of values. It can be `In`, `NotIn`, `Exists` or `DoesNotExist`
+  - `values` is an array of string values. If the operator is `In` or `NotIn`, the
+     values array must be non-empty. If the operator is `Exists` or `DoesNotExist`,
+     the values array must be empty. This array is replaced during a strategic
+     merge patch.
+
+- You can specify multiple `matchExpressions`. All labels must match and all the expressions must evaluate to true for the pods that match the selector.
+
+- See [here](./examples/kubia-replicaset-matchexpressions.yaml) for an example of match expressions. In the example, the match expression part looks like this:
+
+```yaml
+#...
+spec:
+#...
+
+  selector:
+    matchExpressions:
+    # this is a list of associated arrays (aka objects).
+    - key: app 
+      operator: In
+      values:
+      - kubia
+    - {key: otherKey, operator: In, values: [kubia]}
+
+#...
+# with a label like:
+
+  template:
+    metadata:
+      labels:
+        app: kubia
+        otherKey: kubia
+#...
+```
+
+- Here's what this would look like in json:
+
+```json
+"selector": {
+                "matchExpressions": [
+                    {
+                        "key": "app",
+                        "operator": "In",
+                        "values": [
+                            "kubia"
+                        ]
+                    }
+                    {
+                        "key": "otherKey",
+                        "operator": "In",
+                        "values": [
+                            "kubia"
+                        ]
+                    }
+                ]
+            },
+```
+
+- Note, in this syntax, there are two matchExpression objects, each with a key, an operator and a value.
+
+### 4.3.5 Wrapping up ReplicaSets
+
+- Remember, always use ReplicaSets instead of replica controllers.
+
+## 4.4 Running Exactly one Pod on Each Node with `DaemonSets`
+
+- DaemonSets run pods in a 1-1 pairing with nodes that match their `node-selector` (label selector).
+
+- DaemonSets are good for running infrastructure-related pods taht preform system-level operations.
+  - examples: a log collector, the kube-proxy process, the ceph cluster...
+  - Note the kubelet is *not* a DeamonSet https://stackoverflow.com/questions/60007041/is-the-kubernetes-kubelet-a-daemonset/60007264#60007264
+
+- DaemonSets act similarly to systemd or system init in a non-kubernetes environment.
+
+### 4.4.1 Using a DaemonSet to Run a Pod on Every Node
+
+- DaemonSets are like ReplicationControllers and ReplicaSets, but they forgo the scheduler because they already know what node to run on.
+- If you delete a pod managed by the DaemonSet, it will create a new pod for the node that doesn't have the specified pod running anymore.
+
+### 4.4.2 Using a DaemonSet to Run Pods only on Certain Nodes
+
+- DameonSets' `node-Selector`s allow you to managed different nodes differently.
+- The `node-Selector` is defined in the pod template (similar to ReplicaSets and ReplicationControllers)
+- Later, we'll learn how to make nodes unschedulable. DaemonSets will ignore this setting because DaemonSets don't go through the scheduler to deploy pods.
+
+#### Explaining DaemonSets with an Example
+
+- First, we label our node `disk=ssd`
+
+```sh
+$ kubectl label node minikube disk=ssd
+node/minikube labeled
+
+$ kubectl get nodes -Ldisk
+NAME       STATUS   ROLES    AGE   VERSION   DISK
+minikube   Ready    master   3d    v1.17.0   ssd
+```
+
+#### Creating a DaemonSet YAML Definition
+
+- Now we'll create a DaemonSet on nodes with the `disk=ssd` label that runs a mock `ssd-monitor` process that prints "SSD OK" to STDOUT every 5 minutes.
+
+- We used [ssd-monitor-daemonset.yaml](./exercises/ssd-monitor-daemonset.yaml) to create the DaemonSet
+  - Note the `nodeSelector` here and the labels.
+
+#### Creating the DaemonSet
+
+- We can show that the DaemonSet is working like this:
+
+```sh
+$ kubectl create -f ./exercises/ssd-monitor-daemonset.yaml 
+daemonset.apps/ssd-monitor created
+
+$ kubectl get ds
+NAME          DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+ssd-monitor   1         1         1       1            1           disk=ssd        72s
+
+$ kubectl get po -o wide --show-labels 
+NAME                READY   STATUS    RESTARTS   AGE    IP           NODE       NOMINATED NODE   READINESS GATES   LABELS
+ssd-monitor-mv4fr   1/1     Running   0          110s   172.17.0.7   minikube   <none>           <none>            app=ssd-monitor,controller-revision-hash=6678f466df,pod-template-generation=1
+```
+
+#### Adding the Required Label to your Node(s)
+
+- I already did this.
+
+#### Removing the Required Label from the node
+
+- If you remove the required label from the node:
+
+```sh
+$ kubectl label nodes minikube --overwrite disk=hhd
+node/minikube labeled
+```
+
+- The related pod is terminated.
+
+```sh
+$ kubectl get po
+NAME                READY   STATUS        RESTARTS   AGE
+ssd-monitor-mv4fr   1/1     Terminating   0          5m54s
+```
+
+- Note, changing the label on the node is different than changing the label on the pod.
+  - If we changed the label on the pod you would end up with an orphaned pod and a new pod.
+  - Because we changed the label on the node, the pod is still in the Daemon controller's scope, but the node no longer is.
+
+## 4.5 Running Pods That Perform a Single Completable Task
+
+- All the controllers we've learned about so far restart their pods when they stop. 
+- Sometimes we want pods to only run once.
+
+### 4.5.1 introducing the Job Resource
+
+- `Job`s run once, then stop.
+
+- Jobs can fail for various reasons:
+  - If a job's pod fails because its host node dies, the pod is rescheduled.
+  - If the job's pod's processes exit with an error, the job can be configured to recreate the pod or not.
+
+### 4.5.2 Defining a Job Resource
+
+- Here, we create a job [exporter.yaml](./exercises/exporter.yaml)
+
+- Notes on the syntax:
+  - `apiVersion: batch/v1`
+  - They don't explicitly specify a pod selector. It's created based off the template's labels.
+  - `Job.spec.template.spec.restartPolicy` is specified as `OnFailure`. By default, this setting is `Always`. __Don't forget__ this setting it is what makes the job not restart, not that it's managed by a job resource.
+
+### 4.5.3 Seeing a Job Run a Pod
+
+- The image running in the pod sleeps for 2 min
+
+- first create the job
+
+```sh
+$ kubectl create -f ./exercises/exporter.yaml 
+job.batch/batch-job created
+```
+
+- then see that it's running
+
+```sh
+$ kubectl get jobs
+NAME        COMPLETIONS   DURATION   AGE
+batch-job   0/1           10s        10s
+
+$ kubectl get po
+NAME              READY   STATUS    RESTARTS   AGE
+batch-job-2cnhc   1/1     Running   0          17s
+```
+
+- Then wait 2 min and see that it's completed
+
+```sh
+$ kubectl get po 
+NAME              READY   STATUS      RESTARTS   AGE
+batch-job-2cnhc   0/1     Completed   0          3m11s
+```
+
+- Kubernetes keeps the completed pod in memory so you can examine its logs:
+
+```sh
+$ kubectl logs batch-job-2cnhc 
+Fri Jan 31 17:56:25 UTC 2020 Batch job starting
+Fri Jan 31 17:58:25 UTC 2020 Finished succesfully
+```
+
+- When you delete the pod or the job that created the job, the pod will be deleted.
+- After completing the job, its status looks like this:
+
+```sh
+$ kubectl get job
+NAME        COMPLETIONS   DURATION   AGE
+batch-job   1/1           2m7s       5m34s
+```
+
+- notice the job's completions is 1/1 not `yes`.
+
+### 4.5.4 Running Multiple Pod instances in a Job
+
+- Jobs can be used to create multiple jobs (using `completions`), running them in sequence or in parallel (using `parallelism`)
+
+#### Running Job Pods Sequentially
+
+- We will use [multi-completion-batch-job.yaml](./examples/multi-completion-batch-job.yaml) to demonstrate running jobs in sequence.
+- The important parameter is `Job.spec.completions`
+
+- Run the job:
+
+```sh
+$ kubectl create -f ./exercises/multi-completion-batch-job.yaml 
+job.batch/multi-completion-batch-job created
+```
+
+- Once the job completes see its logs with
+
+```sh
+$ kubectl describe job multi-completion-batch-job
+...
+  Type    Reason            Age    From            Message
+  ----    ------            ----   ----            -------
+  Normal  SuccessfulCreate  7m     job-controller  Created pod: multi-completion-batch-job-9xhkw
+  Normal  SuccessfulCreate  4m53s  job-controller  Created pod: multi-completion-batch-job-jk88g
+  Normal  SuccessfulCreate  2m45s  job-controller  Created pod: multi-completion-batch-job-lnl7p
+  Normal  SuccessfulCreate  82s    job-controller  Created pod: multi-completion-batch-job-7vg56
+  Normal  SuccessfulCreate  82s    job-controller  Created pod: multi-completion-batch-job-k4bwj
+```
+
+#### Running Job Pods in Parallel
+
+- You can use the `Job.spec.parallelism` attribute to specify how many jobs should be run in parallel.
+- See [multi-commpletion-parallel-batch-job.yaml](./exercises/multi-completion-parallel-batch-job.yaml) for an example.
+
+#### Scaling a Job
+
+- The book says you can scale jobs with this command. It didn't work for me:
+
+`kubectl scale job multi-completion-batch-job --replicas=3`
+
+- I was able to scale the job by editing the job like this
+
+`kubectl edit jobs multi-completion-batch-job`
+
+### 4.5.5 Limiting the Time Allowed for a Job Pod to Complete
+
+- You can specify how long a pod is allowed to run with `Job.spec.template.spec.activeDeadlineSeconds`
+
+- You can specify how many times a pod is allowed to retry with `Job.spec.backoffLimit`
+  - This defaults to 6
+
+## 4.6 Scheduling Jobs to Run Periodically or Once in the Future
+
+- You can create cron jobs in kubernetes using the `CronJob` resource.
+- The schedule for running the job is in cron format linux uses.
+- At the times specified by the schedule, kubernetes creates a job according to the Job template configured in the CronJob object. When the Job resource is created, one or more pod replicas will be created and started according to the Job's pod template.
+
+### 4.6.1 Creating a CronJob
+
+- To demonstrate the `CronJob` resource, we've created [cronjob.yaml](./exercises/cronjob.yaml).
+
+- Notes about the syntax:
+  - CronJobs have to create a job, not simply a pod so instead of a simple template CronJobs include a `CronJob.spec.jobTemplate`.
+    - This template includes `CronJob.spec.jobTemplate.spec.template` that describes the pod it will run.
+  - `apiVersion: batch/v1beta1`
+  - You specify how often the job runs in `CronJob.spec.schedule`
+
+- Note, cronjobs will leave a lot of jobs behind. You can clean up these jobs automatically with `CronJob.spec.successfulJobsHistoryLimit` and `CronJob.spec.failedJobsHistoryLimit` or you can set a time for the job to remain after it's done with `CronJob.spec.ttlSecondsAfterFinished`.
+
+#### Configuring the Schedule
+
+- There are good tutorials on cronjob syntax online, but basically:
+  - It has 5 sections, minute, hour, day, month, and day of week.
+  - `*` stands for do everything in a section
+  - the sections are separated by spaces
+
+- Examples
+  - "0 3 * * 0" means run at 3 AM every sunday (the last 0 is sunday)
+  - "0,30 * * * *" means run every 30 minutes.
+
+#### Configuring the Job Template
+
+- CronJobs use the jobTemplate section.
+
+### 4.6.2 Understanding How Scheduled Jobs are Run
+
+- CronJobs schedule Jobs that schedule Pods.
+- `CronJob.spec.startingDeadlineSeconds` will cancel jobs (showing failed) if they don't start within a certain number of seconds after they're scheduled.
+
+- Job's scheduling is sometimes unreliable.
+  - Sometimes 2 jobs will run. To fix this, your jobs should be idempotent and not clash with each other (this can be tricky with data).
+  - Sometimes no job will run. To fix this, make sure the next job does the work the first job should have done
+
+## 4.7 Summary
+
+- we've learned
+  - liveness probes and health checks
+  - not to directly create pods
+  - Replication controller concepts
+    - labels
+    - Desired number of pods
+    - templates
+  - Scaling
+  - ReplicaSets
+    - Deployments are coming up
+  - DaemonSets and nodes
+  - Jobs
+  - CronJobs
