@@ -267,7 +267,7 @@ To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
 
 #### Getting an Overview of Your Cluster
 
-- Kubectl talks to the kubernetes API server master node, that talks to the kubelet inside containers.
+- Kubectl talks to the kubernetes API server master node, that talks to the kubelet on nodes.
 
 #### Checking if the Cluster is up by Listing Cluster Nodes
 
