@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-service-api
+spec:
+  type: ExternalName
+  externalName: api.srct.gmu.edu
+  ports:
+  - port: 80
