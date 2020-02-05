@@ -1,12 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: kubia-nodeport
+  name: kubia-loadbalancer
 spec:
-  type: NodePort
+  type: LoadBalancer
   ports:
   - port: 80
     targetPort: 8080
-    nodePort: 30123
   selector:
     app: kubia

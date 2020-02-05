@@ -366,4 +366,284 @@ Hello world
 
 #### Creating a NodePort Service
 
-- Here we'll use [kubia-svc-nodeport.yaml](./examples/kubia-svc-nodeport.yaml) to create a node-port service
+- Here we'll use [kubia-svc-nodeport.yaml](./examples/kubia-svc-nodeport.yaml) to create a node-port service.
+
+- Syntax notes:
+  - `Service.spec.type: NodePort` must be set.
+  - `Service.spec.ports.port` is the port the service can be reached at on the Cluster IP
+  - `Service.spec.ports.targetPort` is the port the service can be reached at in the pods
+  - `Service.spec.ports.nodePort` is the port the service can be reached at on all the nodes.
+
+- In GKE, you will get a warning about configuring firewalls. We'll see that soon.
+
+#### Examining Your NodePort Service
+
+```sh
+$ kubectl get svc kubia-nodeport 
+NAME             TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+kubia-nodeport   NodePort   10.96.184.196   <none>        80:30123/TCP   5m59s
+
+$ kubectl get ep kubia-nodeport 
+NAME             ENDPOINTS                                         AGE
+kubia-nodeport   172.17.0.7:8080,172.17.0.8:8080,172.17.0.9:8080   104m
+```
+
+- The service is now available at:
+  - Port 30123 on all nodes
+    - `localhost:30123` because localhost is a node in the network
+    - Note, if you connect to one of these NodePorts, you will be redirected by the service to a pod that may not be on the node you origionally connected to.
+  - Port 80 on the cluster IP
+    - `10.96.184.196:80`
+  - Port 8080 in the pods
+    - `172.17.0.8:8080`
+
+#### Changing Firewall Rules to Let External Clients Access Our NodePort Service
+
+- GCP requires you to set firewall rules with:
+
+```sh
+$ gcloud compute firewall-rules create kubia-svc-rule -- allow=tcp:30123
+```
+
+- Getting a node's IPs:
+
+```sh
+$ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="ExternalIP")].address}'
+```
+
+- The above command uses [JSONPath](https://kubernetes.io/docs/reference/kubectl/jsonpath/). This is similar to XPath for XML.
+- My minikube isntance doesn't have any external IP addresses but you can see my node's internal IPs with:
+
+```sh
+$ kubectl get nodes -o jsonpath='{.items[*].status.addresses}'
+[map[address:10.58.246.209 type:InternalIP] map[address:minikube type:Hostname]]
+```
+
+- In minikube, you can hit a service using `minikube service<service-name>`:
+
+```sh
+$ minikube service kubia-nodeport
+```
+
+- NodePort services are bad because if a node goes down references to your service will break.
+
+### 5.3.2 Exposing a Service Through an External Load Balancer
+
+- The LoadBalancer service type is an extension of the NodePort service type that provides an infrastructure-provided external IP to the service's cluster IP. It still maps a port on the nodes the same way NodePort services do.
+- Minikube doesn't support LoadBalancer services.
+- Cloud providers (GKE) usually support automatic provisioning of load balancers from the cloud infrastructure. Simply by creating a LoadBalancer service instead of NodePort, you get a public IP.
+
+#### Creating a LoadBalancer Service
+
+- Use [kubia-svc-loadbalancer.yaml](./examples/kubia-svc-loadbalancer.yaml) to create the LoadBalancer service
+
+#### Connecting to the Service Through the LoadBalancer
+
+- The LoadBalancer will take a while to start because the host has to assign an IP to it.
+- I did this on a locally hosted kubernetes instance, so I didn't get an external IP:
+
+```sh
+$ kubectl get svc kubia-loadbalancer
+NAME                 TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+kubia-loadbalancer   LoadBalancer   10.98.156.222   <pending>     80:30661/TCP   9m36s
+
+$ kubectl describe svc kubia-loadbalancer
+Name:                     kubia-loadbalancer
+Namespace:                default
+Labels:                   <none>
+Annotations:              <none>
+Selector:                 app=kubia
+Type:                     LoadBalancer
+IP:                       10.98.156.222
+Port:                     <unset>  80/TCP
+TargetPort:               8080/TCP
+NodePort:                 <unset>  30661/TCP
+Endpoints:                10.10.0.224:8080
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+
+$ curl 10.98.156.222
+You've hit kubia
+```
+
+##### Session affinity and web browsers
+
+- Browsers use keep-alive connections and send all requests through a single connection. This means you will stay connected to a single pod even though you didn't specify session affinity for the service.
+
+### 5.3.3 Understanding the Peculiarities of External Connections
+
+- External connections to services have some challenges
+
+#### Understanding and Preventing Unnecessary Network Hops
+
+- In kubernetes, the kube-proxy (running on nodes) forwards all traffic based on network rules. Setting `Service.spec.externalTrafficPolicy: Local` tells the kube-proxy to not forward requests to external nodes.
+
+- Adding `Service.spec.externalTrafficPolicy: Local` means traffic won't take multiple hops to get to a pod, but:
+  - LoadBalancers only have iptable rules for nodes, not pods. Therefore LoadBalancers balance traffic across nodes no matter how many replicas of your app each node is running resulting in un-even distribution of work across pods (see 5.5).
+  - If one of your nodes/pods is unhealthy or the node doesn't have the corresponding pod running, it has no way to redirect traffic elsewhere. This makes it important to ensure the load balancer forwards connections only to pods that have at least one such pod healthy running.
+
+- Note:
+  - The [loadbalancer depends on provider](https://stackoverflow.com/questions/55435926/how-does-loadbalancer-forward-traffic-to-the-target-service)
+  - How kubernetes [handles forwarding](https://stackoverflow.com/questions/60067188/how-do-kubernetes-nodeport-services-with-service-spec-externaltrafficpolicy-loca/60067630#60067630) is complex.
+    - More on kubernetes' [iptables](https://stackoverflow.com/questions/54865746/how-does-k8s-service-route-the-traffic-to-mulitiple-endpoints) in depth
+    - More on this in ch 11.1.8
+
+#### Being Aware of the Non-Preservation of the Client's IP
+
+- When a client connects to a NodePort, the kube-proxy forwards the client's traffic to a pod using Source Network Address Translation (SNAT). SNAT changes the sender address from client's IP address to the current node's IP address so traffic can be sent back to the current node after it gets forwarded to another node.
+- As a result of SNAT, you generally can't see a client's IP address.
+- Setting `Service.spec.externalTrafficPolicy: Local` preserves the packet's source IP by not performing Source Network Address Translation (SNAT).
+
+## 5.4 Exposing Services Externally Through an Ingress Resource
+
+- Ingress resources are a third way of exposing a service to external clients.
+
+#### Understanding Why Ingresses are Needed
+
+- LoadBalancers are a single service that uses an entire external IP to route to pods of a single label selector type.
+- Ingress resources can route to different services (and therefore sets of pods) based on the URL host and path used to connect to them.
+- Ingresses operate at the application layer of the network stack (HTTP) and can provide features such as cookie-based session affinity and the like, which services can't.
+
+#### Understanding That an Ingress Controller is Requires
+
+- On minikube, you have to enable the ingress plugin:
+
+```sh
+$ minikube addons enable ingress
+✅  ingress was successfully enabled
+
+$ minikube addons list
+...
+```
+
+- GKE uses GCP's HTTP load-balancing to provide the ingress functionality.
+- Some kubernetes implementations don't provide ingress.
+- To handle ingress, kubernetes runs an ingress controller, much like the kube-proxy. It's usually in the `kube-system` namespace, but not always.
+
+```sh
+$ kubectl get po --namespace kube-system 
+NAME                                        READY   STATUS        RESTARTS   AGE
+coredns-6955765f44-l4jvr                    1/1     Running       1          8d
+coredns-6955765f44-ntsfm                    1/1     Running       1          8d
+etcd-minikube                               1/1     Running       1          8d
+kube-addon-manager-minikube                 1/1     Running       1          8d
+kube-apiserver-minikube                     1/1     Running       1          8d
+kube-controller-manager-minikube            1/1     Running       1          8d
+kube-ingress-dns-minikube                   1/1     Running       0          9m13s
+kube-proxy-825q8                            1/1     Running       1          8d
+kube-scheduler-minikube                     1/1     Running       1          8d
+nginx-ingress-controller-6fc5bcc8c9-8jzbx   1/1     Running       0          9m32s
+nvidia-driver-installer-zvms4               0/1     Terminating   0          10m
+nvidia-gpu-device-plugin-cvqbh              1/1     Running       0          8m58s
+storage-provisioner                         1/1     Running       2          8d
+```
+
+### 5.4.1 Creating an Ingress Resource
+
+- Create an ingress resource with [kubia-ingress.yaml](./examples/kubia-ingress.yaml)
+
+- Syntax notes:
+  - `apiVersion: extensions/v1`
+  - `Ingress.spec.rules` is a set of ingress rules.
+      - `Ingress.spec.rules.host` says this rule applies to traffic to `kubia.example.com`
+      - `Ingress.spec.rules.http.paths.path: /` says this rule applies to traffic to `host/`. You could make this a longer path for more detailed traffic control.
+      - `Ingress.spec.rules.http.paths.backend` tells where to map traffic to
+          - `Ingress.spec.rules.http.paths.serviceName: kubia-nodeport` maps traffic to the Kubia-nodeport service
+          - `Ingress.spec.rules.http.paths.servicePort: 80` maps the traffic to port 80 of the service.
+
+- Note, ingress controllers on cloud providers (like GKE) require the Ingress to point to a NodePort service. But that's not a requirement of Kubernetes.
+
+```sh
+$ kubectl create -f ./examples/kubia-ingress.yaml 
+ingress.extensions/kubia created
+```
+
+### 5.4.2 Accessing the Service Through the Ingress
+
+- To access your service through http://kubia.example.com, you'll need to make sure the domain name resolves to the IP of the Ingress controller.
+
+#### Obtaining the IP Address of the Ingress
+
+- Ingresses take a while to start in cloud providers, because the Ingress controller provisions a load balancer behind the scenes.
+
+- Usually you can find your ingress'es IP with:
+
+```sh
+$ kubectl get ingress
+NAME    HOSTS               ADDRESS   PORTS   AGE
+kubia   kubia.example.com   a.a.a.a   80      6s
+```
+
+- But on minikube, use `minikube ip` to get the IP address
+
+#### Ensuring the Host Configured in the Ingress Points to the Ingress's IP Address
+
+- Add a line in `/etc/hosts` (or `C:\windows\system32\drivers\etc\hosts`) that points `kubia.example.com` to your IP.
+
+```sh
+10.58.246.209   kubia.example.com
+```
+
+- This allows you to send traffic to that IP without publically listing it as a domain name.
+
+#### Accessing Pods Through the Ingress
+
+- Now you can hit it:
+
+```sh
+$ curl kubia.example.com
+You've hit kubia-nnkc4
+```
+
+#### Understanding How Ingresses Work
+
+- Ingress controllers get the *host* and *path* from the HTTP GET headers.
+- Once ingress controllers get this information, they ask the related service (defined in their rules) where to forward requests to.
+- Then the ingress sends traffic *directly* to the service's pods.
+
+### 5.4.3 Exposing Multiple Services Through the Same Ingress
+
+- Ingress's ``Ingress.spec.rules` and `Ingress.spec.rules.http.paths` attributes are both arrays. Exposing multiple hosts and/or paths is as simple as adding more elements to these arrays.
+
+#### Mapping Different Services to Different Paths of the Same Host
+
+- Adding another element to `Ingress.spec.rules.http.paths` routes requests to different paths on a single IP to different services.
+
+#### Mapping Different Services to Different Hosts
+
+- Adding another element to `Ingress.spec.rules` allows you to route multiple website domains (and sub-domains) to different services.### 
+
+### 5.4.4 Configuring Ingress to Handle TLS Traffic
+
+- This section will cover manually configuring TLS certificates. This is covered more in chapter 7. Automatic management of certificates with tools like [ambassador](https://auth0.com/blog/kubernetes-tutorial-managing-tls-certificates-with-ambassador/) is ideal.
+
+#### Creating a TLS Certificate for the Ingress
+
+- Ingress controllers terminate the TLS tunnel before they forward traffic to the service's pods.
+
+```graphviz
+graph{
+    Client--Ingress [label="encrypted"];
+    Ingress--pod1 [label="unencrypted"];
+    Ingress--pod2 [label="unencrypted"];
+
+}
+```
+
+- This means:
+  - pods don't have to configure https.
+  - TLS certs and private keys are configured at the Ingress Controller level using kubernetes Secrets (see ch 7 for secrets).
+
+##### Example TLS over Ingress
+
+- First, create the private key and cert:
+
+```sh
+$ openssl genrsa -out tls.key 2048Generating RSA private key, 2048 bit long modulus (2 primes)
+................................................................................................................................................................................+++++
+........................................................................+++++
+e is 65537 (0x010001)
+
+pass
+```
