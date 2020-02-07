@@ -23,6 +23,8 @@ spec:
       value: https://github.com/user-name-is-taken/kubia-website-example.git
     - name: GIT_SYNC_DEST
       value: /git
+    # see this file https://github.com/bborbe/git-sync/blob/master/git-sync.go
+    # for available parameters
   volumes:
   - name: html
     gitRepo:

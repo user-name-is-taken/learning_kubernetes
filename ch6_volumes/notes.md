@@ -144,5 +144,74 @@ Hello there.
 - __Sidecar container__: A container that augments the operation of the main container of the pod.
 - The git sync process would be run in a sidecar container.
 - Sidecar containers keep your main app's code simple and reusable.
-- See [git-synced-volume-pod.yaml](./examples/git-synced-volume-pod.yaml) for the solution.
-- Using [this docker image](https://hub.docker.com/r/openweb/git-sync)
+- See [git-synced-volume-pod.yaml](./examples/git-synced-volume-pod.yaml) for a pod that runs a sidecar to sync a website.
+
+#### Using a gitRepo Volume with Private Git Repositories
+
+- The gitRepo volume doesn't support cloning over ssh out of the box, but you can add support for it using the sidecar pattern listed above. You will have to modify the image though.
+
+#### Wrapping up the gitRepo Volume
+
+- The gitRepo volume's lifecycle is the same as its pod's.
+- Next, we'll cover volumes whose lifecycle isn't tied to their pods.
+
+## 6.3 Accessing Files on the Worker Node's Filesystem
+
+- The `hostPath` volume allows a pod to mount files on the node its running on.
+- `hostPath` volumes are useful in DaemonSets (see ch 4)
+
+### 6.3.1 Introducing the hostPath Volume
+
+- Unlike gitRepo and emptyDir volumes, hostPath volumes' lifecycles aren't tied to the pod they're mounted to. Instead, they're tied to the node they're mounted to.
+- hostPath volumes are useful for specific, node-related functions. You shouldn't use them for cluster-level things like storing a database.
+
+### 6.3.2 Examining System Pods That Use hostPath Volumes
+
+- System pods (like the kube-proxy) correctly use the hostPath volumes to access a node's `/var/log`, `var/lib/docker/containers`, CA certificates, kubeconfig, and other similar directories.
+- For example the kube-proxy has these hostPath volumes:
+
+```sh
+$ kubectl describe po -n kube-system kube-proxy-825q8
+...
+Volumes:
+  kube-proxy:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      kube-proxy
+    Optional:  false
+  xtables-lock:
+    Type:          HostPath (bare host directory volume)
+    Path:          /run/xtables.lock
+    HostPathType:  FileOrCreate
+  lib-modules:
+    Type:          HostPath (bare host directory volume)
+    Path:          /lib/modules
+    HostPathType:  
+  kube-proxy-token-9kkrz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  kube-proxy-token-9kkrz
+    Optional:    false
+...
+```
+
+- Importantly, none of the system pods use hostPath volumes for storing their own data, only for accessing the node's data.
+
+## 6.4 Using Persistent Storage
+
+- For storage to persist across pods and nodes, it needs to be independent of any nodes/pods in your cluster on some type of network attached storage (NAS).
+- Here we'll run a MongoDB pod and attach a volume to it.
+
+### 6.4.1 Using a GCE Persistent Disk in a Pod Volume
+
+- Here they cover manually provisioning storage on GCE.
+
+#### Creating a GCE Persistent Disk
+
+- create a GCE in the same zone as your cluster
+  - Find your cluster's zone with: `$ gcloud container clusters list`
+  - Create the disk like this: `$ gcloud compute disks create --size=1GiB --zone=europe-west1-b mongodb`
+
+- `mongodb` is just the name
+
+#### Creating a Pod Using a gcdPersistentDisk Volume
+
+- On minikube
