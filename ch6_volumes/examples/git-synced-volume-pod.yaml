@@ -13,22 +13,16 @@ spec:
     ports:
     - containerPort: 80
       protocol: TCP
-  - image: openweb/git-sync
+  - image: bborbe/git-sync:1.3.0
     name: git-syncer
     volumeMounts:
     - name: html
-      mountPath: /git-syncer
+      mountPath: /git
     env:
-    - name: GIT_SYNC_URL
+    - name: GIT_SYNC_REPO
       value: https://github.com/user-name-is-taken/kubia-website-example.git
     - name: GIT_SYNC_DEST
-      value: /git-syncer
-    - name: GIT_SYNC_BRANCH
-      value: master
-    - name: GIT_SYNC_REV
-      value: FETCH_HEAD
-    - name: GIT_SYNC_WAIT
-      value: "10"
+      value: /git
   volumes:
   - name: html
     gitRepo:
