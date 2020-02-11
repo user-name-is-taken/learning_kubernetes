@@ -32,3 +32,10 @@
 ## kustomize
 
 - seems cool... (easier than helm)
+
+## rook/ceph stuff
+
+### Random links
+
+- [ceph notes](https://ceph.io/install/)
+- 
