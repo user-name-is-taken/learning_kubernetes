@@ -1,0 +1,2 @@
+- expose the proxy with `kubectl proxy`
+- 

@@ -1,0 +1,18 @@
+# the idea here is to create a custom kubectl proxy
+# which would be exposed with `sudo kubectl port-forward expose-api-pod 88:8001`
+# for education
+# this can also act as a side-car container for accessing the API
+# for some reason, this doesn't work. Maybe the image doesn't forward 8001?
+# the book says it's supposed to talk over the pod's loopback so maybe it doesn't have to?
+apiVersion: v1
+kind: Pod
+metadata:
+  name: expose-api-pod
+spec:
+  containers:
+    - name: ambassador
+      image: luksa/kubectl-proxy:1.6.2
+      command: ["sleep", "9999999"]
+      ports:
+        - name: ambassador
+          containerPort: 8001

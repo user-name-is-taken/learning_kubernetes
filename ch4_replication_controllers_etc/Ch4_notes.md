@@ -668,7 +668,7 @@ $ kubectl describe job multi-completion-batch-job
   - `apiVersion: batch/v1beta1`
   - You specify how often the job runs in `CronJob.spec.schedule`
 
-- Note, cronjobs will leave a lot of jobs behind. You can clean up these jobs automatically with `CronJob.spec.successfulJobsHistoryLimit` and `CronJob.spec.failedJobsHistoryLimit` or you can set a time for the job to remain after it's done with `CronJob.spec.ttlSecondsAfterFinished`.
+- Note, cronjobs will leave a lot of jobs behind. You can clean up these jobs automatically with `CronJob.spec.successfulJobsHistoryLimit` and `CronJob.spec.failedJobsHistoryLimit` or you can set a time for the job to remain after it's done with `CronJob.spec.jobTemplate.spec.ttlSecondsAfterFinished`.
 
 #### Configuring the Schedule
 
