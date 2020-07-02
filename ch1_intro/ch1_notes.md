@@ -39,13 +39,13 @@
 
 - 2 kinds of Scaling
   1. __Scaling up__: Buying more powerful hardware with enough resources for running an application.
-    - This is expensive.
-    - There's a hardware vertical limit on scaling.
+      - This is expensive.
+      - There's a hardware vertical limit on scaling.
   2. __Scaling out__: setting up additional servers and running multiple copies (replicas) of an application.
-    - This is generally cheap.
-    - There's no hardware horizontal limit on scaling.
-    - For monoliths this generally requires changes to the application code to scale out.
-    - Certain parts of an application are difficult to scale out, like the database.
+      - This is generally cheap.
+      - There's no hardware horizontal limit on scaling.
+      - For monoliths this generally requires changes to the application code to scale out.
+      - Certain parts of an application are difficult to scale out, like the database.
 
 - If any part of an application isn't scalable, the whole application isn't scalabel, unless you can split up the application.
 
@@ -55,7 +55,7 @@
   - REST = REpresentational State Transfer
   - AMQP = Advanced Message Queueing Protocol
 
-- Microservices come with the advantage that they can be written in different languages that the microservices they communicate with.
+- Microservices come with the advantage that they can be written in different languages than the microservices they communicate with.
 
 #### Scaling Microservices
 
@@ -91,7 +91,7 @@
 
 #### Understanding the Benefits
 
-- DevOps provides devs and understanding of:
+- DevOps provides devs an understanding of:
   - Op's issues
   - User's issues, feedback and needs
   - How to deploy quickly (making release cycles faster)
@@ -177,8 +177,8 @@
 
 - 3 main docker concepts:
   1. __Images__: A packaged version of your application.
-    - Includes the filesystem and other metadata such as executable paths.
-  2. __Registries__: A repo for storeing and sharing images.
+      - Includes the filesystem and other metadata such as executable paths.
+  2. __Registries__: A repo for storing and sharing images.
   3. __Containers__: Docker containers are just linux containers created from docker images. Linux containers, as we've discussed, are processes that are isolated by namespace and resource-constrained with cgroups.
 
 #### Buiding, Distributing and Running a Docker Image
@@ -289,7 +289,7 @@
 
 - There are 3 steps kubernetes takes in running a container:
   1. The *API server* processes the app's description
-  2. The *Scheduler* schedules thespecified groups of containers onto the available worker nodes based on computational resources required by each group and resources available on each node.
+  2. The *Scheduler* schedules the specified groups of containers onto the available worker nodes based on computational resources required by each group and resources available on each node.
   3. After a worker is scheduled, the worker's *kubelet* instructs the *Container Runtime* (docker) to pull and run the container.
 
 - __Pods__ are sets of applications. We will cover them more in ch 3.
@@ -325,7 +325,7 @@
 
 #### Achieving Better Utilization of Hardware
 
-- Kubernetes is better at optimizing resource use by automatically choosing where to deploy applications than humans ever could
+- Kubernetes is better at optimizing resource use by automatically choosing where to deploy applications better than humans ever could
 
 #### Health Checking and Self-Healing
 
